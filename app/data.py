@@ -40,23 +40,16 @@ class GPTDataLoader:
             # Grab full sequence of length context_length + 1
             seq = self.tokens[start:start + self.context_length + 1]
             
-            x_batch = []
-            y_batch = []
-            # Generate all pairs for t = 1, 2, ..., context_length
-            for t in range(1, self.context_length + 1):
-                x_seq = seq[:t]      # sequence of length t
-                y_token = seq[t]      # single token (next character)
-                
-                # Pad x_seq to context_length
-                x_padded = x_seq + [0] * (self.context_length - len(x_seq))
-                x_batch.append(x_padded)
-                y_batch.append(y_token)
+            # x is sequence without last token
+            x_seq = seq[:-1]  # length context_length
+            # y is sequence shifted by 1 (targets for all positions)
+            y_seq = seq[1:]   # length context_length
             
-            x.append(x_batch)
-            y.append(y_batch)
+            x.append(x_seq)
+            y.append(y_seq)
         
         # Convert to tensors
-        x_tensor = torch.tensor(x, dtype=torch.long)  # (B, context_length, context_length)
+        x_tensor = torch.tensor(x, dtype=torch.long)  # (B, context_length)
         y_tensor = torch.tensor(y, dtype=torch.long)  # (B, context_length)
         
         return x_tensor, y_tensor

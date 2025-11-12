@@ -137,6 +137,12 @@ class GPT(nn.Module):
         # Token embedding
         self.embedding = nn.Embedding(vocab_size, channel_size)
         
+        # Positional embedding
+        self.pos_embedding = nn.Embedding(context_size, channel_size)
+        
+        # Dropout after embeddings
+        self.embed_dropout = nn.Dropout(dropout)
+        
         # Stack of transformer blocks
         self.blocks = nn.ModuleList([
             TransformerBlock(channel_size, head_size, d_ff, dropout)
@@ -149,53 +155,55 @@ class GPT(nn.Module):
         # Output projection
         self.output = nn.Linear(channel_size, vocab_size)
         
-        # Loss function (default CrossEntropyLoss)
-        self.criterion = criterion or nn.CrossEntropyLoss()
+        # Loss function (default CrossEntropyLoss with ignore_index=-1)
+        self.criterion = criterion or nn.CrossEntropyLoss(ignore_index=-1)
         
         self.init_weights()
     
     def init_weights(self):
         """Initialize output layer weights."""
         nn.init.xavier_uniform_(self.embedding.weight)
+        nn.init.normal_(self.pos_embedding.weight, mean=0.0, std=0.02)
         nn.init.xavier_uniform_(self.output.weight)
         nn.init.zeros_(self.output.bias)
         
     def forward(self, x, y=None, mask=None):
         """
         Args:
-            x: (B*T, T) - token indices
-            y: (B*T,) - target tokens (optional)
+            x: (B, T) - token indices
+            y: (B, T) - target tokens for all positions (optional)
             mask: Optional attention mask
         Returns:
             If y provided: (loss, logits)
             If y not provided: logits
         """
-        # Embedding: (B*T, T) -> (B*T, T, C)
-        x = self.embedding(x)
+        B, T = x.shape
+        device = x.device
+        
+        # Token embeddings: (B, T) -> (B, T, C)
+        tok_emb = self.embedding(x)
+        
+        # Position embeddings: (T,) -> (T, C)
+        pos = torch.arange(0, T, dtype=torch.long, device=device)
+        pos_emb = self.pos_embedding(pos)
+        
+        # Add and apply dropout: (B, T, C) + (T, C) -> (B, T, C)
+        x = self.embed_dropout(tok_emb + pos_emb)
         
         # Pass through transformer blocks
         for block in self.blocks:
-            x = block(x, mask)  # (B*T, T, C) -> (B*T, T, C)
+            x = block(x, mask)  # (B, T, C) -> (B, T, C)
         
         # Final layer norm
-        x = self.norm(x)  # (B*T, T, C)
+        x = self.norm(x)  # (B, T, C)
         
-        # Output projection: (B*T, T, C) -> (B*T, T, vocab_size)
+        # Output projection: (B, T, C) -> (B, T, vocab_size)
         logits = self.output(x)
         
-        # If targets provided, compute loss
+        # If targets provided, compute loss at all positions
         if y is not None:
-            # For each example, use the position corresponding to its sequence length
-            # Example i has sequence length (i % T) + 1, so use position (i % T)
-            T = logits.shape[1]
-            batch_indices = torch.arange(logits.shape[0], device=logits.device)  # (B*T,)
-            position_indices = batch_indices % T  # Position within batch sample's examples
-            
-            # Extract logits at correct positions
-            logits_correct = logits[batch_indices, position_indices, :]  # (B*T, vocab_size)
-            
-            # Compute loss
-            loss = self.criterion(logits_correct, y)
+            # Compute loss at all positions (like Karpathy)
+            loss = self.criterion(logits.view(-1, self.vocab_size), y.view(-1))
             return loss, logits
         
         return logits
