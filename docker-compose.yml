@@ -1,0 +1,30 @@
+services:
+
+  cpu:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BASE: cpu
+    volumes:
+      - .:/app
+    tty: true
+    command: /bin/bash
+
+  gpu:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BASE: gpu
+    volumes:
+      - .:/app
+    tty: true
+    command: /bin/bash
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
