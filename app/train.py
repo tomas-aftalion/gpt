@@ -6,9 +6,9 @@ if __name__ == "__main__":
     # Get and tokenize text
     CONTEXT = 20
     BATCH = 32
-    CHANNELS = 128
-    HEADS = 8
-    LAYERS = 4
+    CHANNELS = 8
+    HEADS = 4
+    LAYERS = 2
 
     text = data.get_shakespeare()
     tokenizer = data.Tokenizer(text)
@@ -41,19 +41,31 @@ if __name__ == "__main__":
     # Move model to device
     model = model.to(device)
     
-    # Get a batch
-    x, y = train_loader.get_batch()  # x: (B, T, T), y: (B, T)
+    # Setup optimizer
+    optimizer = torch.optim.AdamW(model.parameters(), lr=0.001)
     
-    # Reshape (reuse x and y)
-    B, T, _ = x.shape
-    x = x.view(B * T, T)  # (B*T, T)
-    y = y.view(B * T)  # (B*T,)
-    
-    # Move to device
-    x = x.to(device)
-    y = y.to(device)
-    
-    # Forward pass
-    logits = model(x)  # (B*T, T, vocab_size)
-    print(f"Reshaped shapes - x: {x.shape}, y: {y.shape}")
-    print(f"Logits shape: {logits.shape}")
+    # Training loop
+    num_steps = 1000
+    for step in range(num_steps):
+        # Get batch
+        x, y = train_loader.get_batch()  # x: (B, T, T), y: (B, T)
+        
+        # Reshape (reuse x and y)
+        B, T, _ = x.shape
+        x = x.view(B * T, T).to(device)  # (B*T, T)
+        y = y.view(B * T).to(device)  # (B*T,)
+        
+        # Forward pass - model returns loss and logits
+        loss, logits = model(x, y=y)
+        
+        # Backward pass
+        optimizer.zero_grad()
+        loss.backward()
+        
+        # Clip gradients
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        
+        optimizer.step()
+        
+        # Print loss
+        print(f"Step {step}: loss = {loss.item():.4f}")

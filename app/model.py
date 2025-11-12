@@ -16,6 +16,19 @@ class MultiHeadAttention(nn.Module):
         self.v = nn.Linear(channel_size, channel_size)
         self.output = nn.Linear(channel_size, channel_size)
         
+        self.init_weights()
+    
+    def init_weights(self):
+        """Initialize attention layer weights."""
+        nn.init.xavier_uniform_(self.q.weight)
+        nn.init.xavier_uniform_(self.k.weight)
+        nn.init.xavier_uniform_(self.v.weight)
+        nn.init.xavier_uniform_(self.output.weight)
+        nn.init.zeros_(self.q.bias)
+        nn.init.zeros_(self.k.bias)
+        nn.init.zeros_(self.v.bias)
+        nn.init.zeros_(self.output.bias)
+        
     def forward(self, x, mask=None):
         """
         Args:
@@ -84,6 +97,15 @@ class TransformerBlock(nn.Module):
         # Dropout
         self.dropout = nn.Dropout(dropout)
         
+        self.init_weights()
+    
+    def init_weights(self):
+        """Initialize FFN layer weights."""
+        nn.init.kaiming_normal_(self.ffn[0].weight, mode='fan_in', nonlinearity='relu')
+        nn.init.xavier_uniform_(self.ffn[2].weight)
+        nn.init.zeros_(self.ffn[0].bias)
+        nn.init.zeros_(self.ffn[2].bias)
+        
     def forward(self, x, mask=None):
         """
         Args:
@@ -106,10 +128,11 @@ class TransformerBlock(nn.Module):
 
 class GPT(nn.Module):
     def __init__(self, vocab_size, channel_size=128, head_size=8, layer_size=6, 
-                 context_size=256, d_ff=None, dropout=0.1):
+                 context_size=256, d_ff=None, dropout=0.1, criterion=None):
         super().__init__()
         self.channel_size = channel_size
         self.context_size = context_size
+        self.vocab_size = vocab_size
         
         # Token embedding
         self.embedding = nn.Embedding(vocab_size, channel_size)
@@ -126,13 +149,26 @@ class GPT(nn.Module):
         # Output projection
         self.output = nn.Linear(channel_size, vocab_size)
         
-    def forward(self, x, mask=None):
+        # Loss function (default CrossEntropyLoss)
+        self.criterion = criterion or nn.CrossEntropyLoss()
+        
+        self.init_weights()
+    
+    def init_weights(self):
+        """Initialize output layer weights."""
+        nn.init.xavier_uniform_(self.embedding.weight)
+        nn.init.xavier_uniform_(self.output.weight)
+        nn.init.zeros_(self.output.bias)
+        
+    def forward(self, x, y=None, mask=None):
         """
         Args:
             x: (B*T, T) - token indices
+            y: (B*T,) - target tokens (optional)
             mask: Optional attention mask
         Returns:
-            logits: (B*T, T, vocab_size)
+            If y provided: (loss, logits)
+            If y not provided: logits
         """
         # Embedding: (B*T, T) -> (B*T, T, C)
         x = self.embedding(x)
@@ -146,5 +182,20 @@ class GPT(nn.Module):
         
         # Output projection: (B*T, T, C) -> (B*T, T, vocab_size)
         logits = self.output(x)
+        
+        # If targets provided, compute loss
+        if y is not None:
+            # For each example, use the position corresponding to its sequence length
+            # Example i has sequence length (i % T) + 1, so use position (i % T)
+            T = logits.shape[1]
+            batch_indices = torch.arange(logits.shape[0], device=logits.device)  # (B*T,)
+            position_indices = batch_indices % T  # Position within batch sample's examples
+            
+            # Extract logits at correct positions
+            logits_correct = logits[batch_indices, position_indices, :]  # (B*T, vocab_size)
+            
+            # Compute loss
+            loss = self.criterion(logits_correct, y)
+            return loss, logits
         
         return logits
