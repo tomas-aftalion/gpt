@@ -24,6 +24,10 @@ if __name__ == "__main__":
     train_loader = data.GPTDataLoader(train_tokens, context_length=CONTEXT, batch_size=BATCH)
     test_loader = data.GPTDataLoader(test_tokens, context_length=CONTEXT, batch_size=BATCH)
     
+    # Determine device
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(f"Using device: {device}")
+    
     # Create model
     model = GPT(
         vocab_size=vocab_size,
@@ -34,12 +38,20 @@ if __name__ == "__main__":
         dropout=0.1
     )
     
+    # Move model to device
+    model = model.to(device)
+    
     # Get a batch
     x, y = train_loader.get_batch()  # x: (B, T, T), y: (B, T)
     
-    B, T, T = x.shape
+    # Reshape (reuse x and y)
+    B, T, _ = x.shape
     x = x.view(B * T, T)  # (B*T, T)
     y = y.view(B * T)  # (B*T,)
+    
+    # Move to device
+    x = x.to(device)
+    y = y.to(device)
     
     # Forward pass
     logits = model(x)  # (B*T, T, vocab_size)
