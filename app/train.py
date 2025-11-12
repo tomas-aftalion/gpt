@@ -4,11 +4,11 @@ import torch
 
 if __name__ == "__main__":
     # Get and tokenize text
-    CONTEXT = 8
-    BATCH = 4
-    CHANNELS = 4
-    HEADS = 1
-    LAYERS = 1
+    CONTEXT = 20
+    BATCH = 32
+    CHANNELS = 128
+    HEADS = 8
+    LAYERS = 4
 
     text = data.get_shakespeare()
     tokenizer = data.Tokenizer(text)

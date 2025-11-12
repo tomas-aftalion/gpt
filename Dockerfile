@@ -2,7 +2,7 @@
 ARG BASE=cpu
 
 FROM ubuntu:24.04 AS cpu-base
-FROM nvidia/cuda:12.4.1-base-ubuntu22.04 AS gpu-base
+FROM nvidia/cuda:11.8.0-base-ubuntu22.04 AS gpu-base
 FROM ${BASE}-base AS base
 
 RUN apt-get update && apt-get install -y \
