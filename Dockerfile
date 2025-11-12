@@ -22,4 +22,4 @@ RUN pip3 install -r requirements.txt
 # Copy all code from repository
 COPY . .
 
-CMD ["python3"]
+RUN pip3 install -e .

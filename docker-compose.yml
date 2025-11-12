@@ -1,6 +1,7 @@
 services:
 
   cpu:
+    container_name: cpu
     build:
       context: .
       dockerfile: Dockerfile
@@ -12,6 +13,7 @@ services:
     command: /bin/bash
 
   gpu:
+    container_name: gpu
     build:
       context: .
       dockerfile: Dockerfile
